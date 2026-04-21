@@ -53,4 +53,70 @@ class Net(nn.Module):
         x = self.dropout(x)
         x = nn.linaer(32,10)
         return x
+
+def model_train(model,data_loader,use_scheduler=False,lr=0.01,epoch=5):
+    model.train()
+
+    optimizer = optim.Adam(model.parameters(),lr=lr)
+    criterion = nn.CrossEntropyLoss()
+    scheduler = optim.lr_scheduler.StepLR(optimizer,step_size=4,gamma=0.8)
+
+    elosses = []
+    blosses = []
+    accuracies = []
+
+    for times in range(epoch):
+        correct = 0
+        total = 0
+        accuracy = 0
+
+        for x, y in data_loader:
+            x = x.to(device)
+            y = y.to(device)
+
+            pred = model(x)
+            loss = criterion(pred,y)
+            pred_class = pred.argmax(dim = 1)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            correct += (pred_class == y).sum().item()
+            total += y.size(0)
+
+            run_losses += loss.item()
+
+            blosses.append(loss.item())
+            accuracies.append((pred_class == y).sum().item()/y.size(0))
+        acc = correct/total
+        avr_loss = run_losses/len(train_loader)
+        elosses.append(avr_loss)
+        if (times+1)%10 == 0 :
+            print(f"Times: {times+1}, Loss: {avr_loss}, Accuracy: {acc}.")
+
+        if use_scheduler:
+            scheduler.step()
+
+    return elosses,blosses,accuracies
+
+def model_test(model,test_loader):
+
+    model.eval()
     
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for x,y in test_loader:
+            x = x.to(device)
+            y = y.to(device)
+
+            pred = model(x)
+            pred_class = pred.argmax(dim=1)
+
+            correct += (pred_class == y).sum().item()
+            total += y.size(0)
+            
+    return correct/total
+
