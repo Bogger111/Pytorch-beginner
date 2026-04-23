@@ -52,14 +52,14 @@ class Net(nn.Module):
         )
         self.flat = nn.Flatten(start_dim=1)
         self.fc = nn.Sequential(
-            nn.Linear(128*4*4,128),
+            nn.Linear(128*4*4,256),
             nn.ReLU(),
         )
         if use_dropout:
             self.dropout = nn.Dropout(0.5)
         else:
             self.dropout = nn.Identity()
-        self.fc2 = nn.Linear(128,10)
+        self.fc2 = nn.Linear(256,10)
 
     def forward(self,x):
         x = self.conv(x)
@@ -132,14 +132,14 @@ def model_running(configs):
         model = Net(use_dropout=cfg['dropout']).to(device)
         models[name] = model
         
-        optimizer = optim.Adam(model.parameters(),lr=cfg['lr'])
+        optimizer = optim.Adam(model.parameters(),lr=cfg['lr'],weight_decay=1e-4)
         criterion = nn.CrossEntropyLoss()
-        scheduler = optim.lr_scheduler.StepLR(optimizer,step_size=2,gamma=0.8)
+        scheduler = optim.lr_scheduler.StepLR(optimizer,step_size=5,gamma=0.8)
 
         losses = []
         train_accs = []
         test_accs = []
-
+        best_acc = 0
         for times in range(cfg['epoch']):
             
             train_acc,avr_loss = model_train(
@@ -157,9 +157,53 @@ def model_running(configs):
             train_accs.append(train_acc)
             test_accs.append(test_acc)
 
-            print(f"Epoch:{times+1}, Loss:{avr_loss:.4f}, Train accuracy:{train_acc:.4f}, Test accuracy:{test_acc:.4f}, Best accuracy:{max(test_accs):.4f}.")
+            if test_acc > best_acc:
+                best_acc = test_acc
+                torch.save({
+                    'model':model.state_dict(),
+                    'acc':best_acc,
+                },'best_model.pth')
+
+            print(f"Epoch:{times+1}, Loss:{avr_loss:.4f}, Train accuracy:{train_acc:.4f}, Test accuracy:{test_acc:.4f}, Best accuracy:{best_acc:.4f}.")
             
-    results[name] = (losses,train_accs,test_accs)
+            results[name] = (losses,train_accs,test_accs)
+            
+
     return results 
 
+def plot_acc(results,configs):
+    for name , cfg in configs.items():
+        plt.figure(figsize=(12,6))
+        
+        epochs = range(1,len(results[name][0])+1)
+        
+        plt.plot(epochs,results[name][1],label = 'train_acc')
+        plt.plot(epochs,results[name][2],label = "test_acc")
+        
+        plt.title(name)
+
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+
+        plt.legend()
+        plt.grid()
+        plt.show()
+
+def plot_loss(results,configs):
+    for name , cfg in configs.items():
+        plt.figure(figsize=(8,6))
+
+        epochs = range(1,len(results[name][0])+1)
+
+        plt.plot(epochs,results[name][0],label = 'loss')
+
+        plt.xlabel('Epochs')
+        plt.ylabel("Loss")
+
+        plt.grid()
+        plt.show()
+
 results = model_running(configs)
+
+plot_acc(results,configs)
+plot_loss(results,configs)
